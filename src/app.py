@@ -67,6 +67,17 @@ node_fatigue_global  = {}   # keys: int
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR     = os.path.join(BASE_DIR, '..', '.data')
 MODELS_DIR   = os.path.join(BASE_DIR, '..', '.models')
+
+# Fallback to /tmp for Vercel/Serverless read-only environments
+try:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(MODELS_DIR, exist_ok=True)
+except OSError:
+    DATA_DIR     = '/tmp/.data'
+    MODELS_DIR   = '/tmp/.models'
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(MODELS_DIR, exist_ok=True)
+
 HISTORY_FILE = os.path.join(DATA_DIR,   'routing_history.csv')
 TRUST_FILE   = os.path.join(DATA_DIR,   'trust_values.json')
 MODEL_FILE   = os.path.join(MODELS_DIR, 'routing_model.pkl')
@@ -450,12 +461,11 @@ def build_event_log(data):
 
 @app.route('/')
 def index():
-    # Serve index.html if it exists in templates/, else return a helpful message
     try:
         from flask import render_template
         return render_template('index.html')
-    except Exception:
-        return safe_jsonify({'status': 'ok', 'message': 'Smart Routing ML API is running.'})
+    except:
+        return "Smart Routing API is running"
 
 
 @app.route('/api/predict', methods=['POST', 'OPTIONS'])

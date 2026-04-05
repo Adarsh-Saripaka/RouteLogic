@@ -1,0 +1,33 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Core Python Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Deployment & Vercel
+.vercel/
+
+# Memory, Data, & ML Models (Crucial to ignore for Vercel)
+.data/
+.models/
+*.pkl
+*.csv
+trust_values.json
+routing_history.csv
+
+# IDEs & System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

@@ -65,7 +65,8 @@ node_fatigue_global  = {}   # keys: int
 
 # ── File paths ─────────────────────────────────────────────────────────────────
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR     = os.path.join(BASE_DIR, '..', '.data')
+# Priority: Environment variable (Persistent Disk mount e.g. /data) > local .data
+DATA_DIR     = os.getenv('DATA_DIR', os.path.join(BASE_DIR, '..', '.data'))
 MODELS_DIR   = os.path.join(BASE_DIR, '..', '.models')
 
 # Fallback to /tmp for Vercel/Serverless read-only environments

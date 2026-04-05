@@ -461,11 +461,12 @@ def build_event_log(data):
 
 @app.route('/')
 def index():
+    """Root route: serving the main UI from the templates folder."""
     try:
         from flask import render_template
         return render_template('index.html')
-    except:
-        return "Smart Routing API is running"
+    except Exception as e:
+        return f"Error loading index.html: {str(e)}", 500
 
 
 @app.route('/api/predict', methods=['POST', 'OPTIONS'])
@@ -702,9 +703,12 @@ def chaos_inject():
 
 @app.route('/health')
 def health():
+    """Detailed health check for both human and monitoring systems."""
     return safe_jsonify({
         'status':   'ok',
         'ml_model': 'loaded' if ml_model else 'not_loaded',
+        'trust_nodes': len(trust_scores_global),
+        'timestamp': datetime.now().isoformat()
     })
 
 

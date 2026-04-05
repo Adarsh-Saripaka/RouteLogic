@@ -661,7 +661,12 @@ input[type=range]::-webkit-slider-thumb{
 /* ═══════════════════════════════════════════════════
    CONSTANTS
 ═══════════════════════════════════════════════════ */
-const BACKEND = 'http://127.0.0.1:5000';
+// Dynamic backend selection: 
+// 1. If on localhost (127.0.0.1), use port 5000.
+// 2. If on Vercel/Production, use the SAME domain (relative path).
+const BACKEND = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+  ? 'http://127.0.0.1:5000'
+  : window.location.origin;  // This makes the frontend hit its own domain
 
 /* ═══════════════════════════════════════════════════
    STATE
@@ -1444,8 +1449,26 @@ window.addEventListener('resize', () => {
   draw(S.highlightPath);
 });
 
-createNetwork(5);
-loadTrustFromBackend();
+// Initialization sequence
+(async function init() {
+  createNetwork(5);
+  updateStats();
+  
+  // Health check to verify backend connectivity
+  try {
+    const health = await fetch(`${BACKEND}/health`);
+    if (health.ok) {
+      addLocalEvent('success', '✅', 'Backend connection established. System ready.');
+    } else {
+      throw new Error('Backend uninitialized');
+    }
+  } catch (e) {
+    addLocalEvent('warning', '⚠️', 
+      `Backend unreachable at ${BACKEND}. Please ensure your Python server is running.`);
+  }
+
+  loadTrustFromBackend();
+})();
 </script>
 </body>
 </html>

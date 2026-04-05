@@ -1,16 +1,17 @@
-#  Smart Routing ML System
+# 🚀 Smart Routing ML System
 
-A machine learning–based network routing simulator that selects optimal paths using **trust scoring, QoS metrics, and anomaly detection**.
+A machine learning–based network routing simulator that selects optimal paths using **trust scoring, QoS metrics, anomaly detection, and dynamic traffic simulation**.
 
 ---
 
-## Features
+## 📌 Features
 
 * **Intelligent Routing:** Hybrid ML + cost-based path selection
 * **Adaptive Trust System:** Nodes update trust based on performance
 * **Packet Simulation:** Models delay, loss, congestion, and fatigue
 * **Anomaly Detection:** Flags unreliable or overused nodes
 * **QoS Evaluation:** Supports real-time, premium, and best-effort traffic
+* **Traffic / DoS Simulation:** Inject artificial load on specific nodes to simulate congestion or denial-of-service scenarios and observe routing behavior
 * **Persistent Learning:** Stores history and retrains ML model
 
 ---
@@ -27,8 +28,9 @@ CN_PROJECT/
 │   │   └── index.html  # Frontend UI
 │   ├── app.py          # Flask backend
 │   ├── main.py         # Core simulation logic
+│   ├── requirements.txt
+│   └── vercel.json
 │
-├── requirements.txt
 └── README.md
 ```
 
@@ -37,18 +39,14 @@ CN_PROJECT/
 ## ⚙️ Setup
 
 ```bash
-git clone https://github.com/your-username/smart-routing-ml.git
-cd smart-routing-ml
+git clone https://github.com/Adarsh-Saripaka/RouteLogic.git
 
-python -m venv .venv
-.venv\Scripts\activate   # Windows
-
-pip install -r requirements.txt
+pip install -r src/requirements.txt
 ```
 
 ---
 
-## ▶️ Run
+## ▶️ Run (Local)
 
 ```bash
 cd src
@@ -56,6 +54,12 @@ python app.py
 ```
 
 Open: **http://localhost:5000**
+
+---
+
+## 🌐 Live Deployment
+
+https://route-logic.vercel.app/
 
 ---
 
@@ -81,7 +85,7 @@ Open: **http://localhost:5000**
 * Scikit-learn (Random Forest)
 * NetworkX
 * Pandas, NumPy
-* HTML, CSS, JS
+* HTML, CSS, JavaScript
 
 ---
 
@@ -89,13 +93,13 @@ Open: **http://localhost:5000**
 
 * Designed for simulation and learning
 * ML accuracy improves with more historical data
+* Data persistence (trust/history) is limited in deployment due to serverless environment
 
 ---
 
-## 👨‍💻 Author
+## 👨‍💻 Authors
 
-Adarsh – B.Tech Student | AI & Systems Enthusiast
+* Adarsh Saripaka
+* Yug Patel
 
 ---
-
-A system-level project combining networking + ML + behavioral logic

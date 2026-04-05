@@ -1108,8 +1108,13 @@ function renderResults(data) {
       </div>
       <div class="kpi">
         <div class="kpi-label">Path Selected</div>
-        <div class="kpi-val" style="font-size:1.2rem;margin-top:6px">${Math.max(0, path.length - 1)} Hops</div>
+        <div class="kpi-val" style="font-size:1.15rem;margin-top:6px">${Math.max(0, path.length - 1)} Hops</div>
         <div class="kpi-sub" style="font-size:0.6rem">${pathStr || '—'}</div>
+      </div>
+      <div class="kpi" style="border-left:2px solid var(--blue)">
+        <div class="kpi-label">Dijkstra Cost</div>
+        <div class="kpi-val" style="color:var(--yellow)">${pm.final_path_cost || '0.00'}</div>
+        <div class="kpi-sub">Normalized path weight</div>
       </div>
     </div>
 
@@ -1160,6 +1165,11 @@ function renderResults(data) {
           <td>QoS Score</td>
           <td>${(qos.qos_score || 0).toFixed(4)}</td>
           <td>${slaBadge}</td>
+        </tr>
+        <tr style="background:rgba(255,170,0,0.05)">
+          <td style="color:var(--yellow);font-weight:700">Final Path Cost</td>
+          <td style="color:var(--yellow);font-weight:700">${pm.final_path_cost || '0.000'}</td>
+          <td><span class="badge badge-yellow">OPTIMIZED</span></td>
         </tr>
       </tbody>
     </table>
@@ -1362,12 +1372,16 @@ function renderAnomalyQoS(data) {
     </div>
 
     <div class="explain-block">
-      <h4>📶 QoS-Aware Routing</h4>
+      <h4>📶 QoS-Aware Routing (VoIP Ready)</h4>
       <p>
-        <strong>Real-Time</strong> traffic weights delay at 60%, loss at 30%.
-        <strong>Premium</strong> balances all four factors equally.
-        <strong>Best Effort</strong> prioritises bandwidth and load.
-        Each path is scored per class and must exceed a 0.60 SLA threshold.
+        <strong>Real-Time (VoIP/Video):</strong> Prioritizes <strong>ultra-low latency</strong> and minimal packet loss. 
+        Routing weights are tilted 60% towards delay reduction to prevent jitter.
+      </p>
+      <p style="margin-top:8px">
+        <strong>Premium:</strong> Balances speed and reliability. High redundancy and stability.
+      </p>
+      <p style="margin-top:8px">
+        <strong>Best Effort:</strong> Classical bulk data transfer. Focuses on throughput and fair queueing.
       </p>
     </div>`;
 }

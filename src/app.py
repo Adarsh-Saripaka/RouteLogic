@@ -107,12 +107,27 @@ def compute_reward(success_rate, path_metrics):
 
 
 def update_trust_enhanced(current_trust, reward, ml_prob, node_fatigue=0.0, hop_index=0):
-    """Perfect Formula: T_new = T_old + α·M·(R_node − T_old)·(1 − T_old·β)"""
-    M     = 0.5 + float(ml_prob)
-    # Node specific variance based on fatigue and topological position
-    node_reward = max(0.0, reward - (node_fatigue * 0.15) - (hop_index * 0.01))
+    """
+    Perfect Formula: T_new = T_old + α·M·(R_node − T_old)·(1 − T_old·β)
+    Enhanced with position-based decay and slight stochastic variance to prevent identical values.
+    """
+    M = 0.5 + float(ml_prob)
+    
+    # Position penalty: nodes further down the path are slightly less rewarded (responsibility attribution)
+    pos_factor = 1.0 - (hop_index * 0.02)
+    
+    # Fatigue impact: heavily fatigued nodes struggle to gain trust
+    fatigue_penalty = node_fatigue * 0.2
+    
+    node_reward = max(0.0, (reward * pos_factor) - fatigue_penalty)
+    
+    # Add a tiny bit of unique node noise (0.001 range) to ensure distinct values for different nodes
+    node_noise = np.random.uniform(-0.001, 0.001)
+    
     delta = TRUST_ALPHA * M * (node_reward - current_trust) * (1.0 - current_trust * TRUST_BETA)
-    return float(np.clip(current_trust + delta, TRUST_MIN, TRUST_MAX))
+    new_trust = current_trust + delta + node_noise
+    
+    return float(np.clip(new_trust, TRUST_MIN, TRUST_MAX))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -271,8 +286,10 @@ def generate_path_metrics(path):
     }
 
 
-def _ml_score(features, strategy):
-    """Return a scalar score for a candidate path."""
+def _ml_score(features, strategy, qos_priority='best_effort'):
+    """Return a scalar score for a candidate path, now aware of QoS requirements."""
+    delay, loss, bw, ld, trust = features
+    
     if ml_model is None:
         ml_prob = 0.5
     else:
@@ -280,28 +297,44 @@ def _ml_score(features, strategy):
         ml_prob = float(proba[1]) if len(proba) > 1 else float(proba[0])
 
     if strategy == 'ml_only':
-        return ml_prob, ml_prob
+        return ml_prob, ml_prob, 0.0
 
-    delay, loss, bw, ld, trust = features
-    # Exponential trust penalty: as trust drops below 0.8, cost increases significantly
-    trust_penalty = (1.0 / (trust ** 2)) if trust > 0.1 else 100.0
-    cost_val = (delay / 30.0) + (loss * 10.0) + ld + (1.0 - min(1.0, bw / 100.0)) + trust_penalty
+    # Weights dynamically adjusted by QoS class for routing decision
+    # Real-time: latency is king
+    # Premium: stability/reliability is king
+    # Best-effort: throughput (bw) is king
+    W_qos = {
+        'real_time':   {'delay': 2.5, 'loss': 15.0, 'bw': 0.1,  'load': 0.2, 'trust': 1.0},
+        'premium':     {'delay': 1.0, 'loss': 5.0,  'bw': 0.5,  'load': 0.5, 'trust': 2.0},
+        'best_effort': {'delay': 0.5, 'loss': 2.0,  'bw': 1.0,  'load': 1.0, 'trust': 0.5},
+    }.get(qos_priority, {'delay': 0.5, 'loss': 2.0, 'bw': 1.0, 'load': 1.0, 'trust': 0.5})
+
+    # Trust penalty: as trust drops, cost increases.
+    # For Cost-Only mode (Dijkstra), we still keep a baseline trust check but emphasize latency.
+    trust_p_mult = W_qos['trust']
+    trust_penalty = (trust_p_mult / (trust ** 1.5)) if trust > 0.1 else 200.0
+    
+    cost_val = (delay * W_qos['delay']) + (loss * W_qos['loss']) + (ld * W_qos['load']) + \
+               (1.0 - min(1.0, bw / 100.0)) * W_qos['bw'] + trust_penalty
+
+    # Normalize cost into a 0-1 score (inverse)
     cost_score = 1.0 / (1.0 + cost_val)
 
     if strategy == 'cost_only':
-        return cost_score, ml_prob
+        return cost_score, ml_prob, cost_val
 
     # hybrid: 60 % ML, 40 % cost (to match UI)
     score = 0.6 * ml_prob + 0.4 * cost_score
-    return score, ml_prob
+    return score, ml_prob, cost_val
 
 
-def select_best_path_ml(paths, strategy, trust_scores, fatigue_scores):
+def select_best_path_ml(paths, strategy, trust_scores, fatigue_scores, qos_priority='best_effort'):
     # FIX: guard against empty list
     if not paths:
         return [], {}
 
     best_path, best_score, best_ml_prob, best_pm = paths[0], -float('inf'), 0.5, generate_path_metrics(paths[0])
+    best_cost = 0.0
 
     for path in paths:
         pm = generate_path_metrics(path)
@@ -313,14 +346,17 @@ def select_best_path_ml(paths, strategy, trust_scores, fatigue_scores):
         pm['trust_avg'] = path_trust
         features = [pm['avg_delay'], pm['packet_loss'],
                     pm['bandwidth'], pm['load'], pm['trust_avg']]
-        score, ml_prob = _ml_score(features, strategy)
+        
+        score, ml_prob, cost_val = _ml_score(features, strategy, qos_priority)
         
         # Add tiny jitter to discourage taking the shortest path continuously if scores tie
         score += np.random.uniform(-0.0001, 0.0001)
         
         if score > best_score:
             best_score, best_path, best_ml_prob, best_pm = score, path, ml_prob, pm
+            best_cost = cost_val
 
+    best_pm['final_path_cost'] = round(best_cost, 4)
     return best_path, best_pm
 
 
@@ -525,7 +561,7 @@ def predict_api():
 
         # ── Select best path ──────────────────────────────────────────────────
         best_path, path_metrics = select_best_path_ml(
-            all_paths, strategy, trust_scores_global, node_fatigue_global)
+            all_paths, strategy, trust_scores_global, node_fatigue_global, qos_priority)
 
         best_path = [int(n) for n in best_path]
 

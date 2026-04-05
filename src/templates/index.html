@@ -705,7 +705,7 @@ function createNetwork(count) {
   S.selectedForEdge  = [];
   S.highlightPath    = null;                          // FIX: clear stale path
   S.compromisedNodes.clear();
-  S.nodes.forEach(n => S.trust[n] = 0.5);
+  S.nodes.forEach(n => S.trust[n] = 0.9);
   rebuildNodeGrid();
   rebuildSelectors();
   updateStats();
@@ -916,8 +916,8 @@ function updateStats() {
   document.getElementById('sNodes').textContent = S.nodes.length;
   document.getElementById('sEdges').textContent = S.edges.length;
   const avg = S.nodes.length
-    ? (S.nodes.reduce((s, n) => s + (S.trust[n] ?? 0.5), 0) / S.nodes.length).toFixed(3)
-    : '0.500';
+    ? (S.nodes.reduce((s, n) => s + (S.trust[n] ?? 0.9), 0) / S.nodes.length).toFixed(3)
+    : '0.900';
   document.getElementById('sTrust').textContent = avg;
   rebuildTrustMini();
 }
@@ -929,9 +929,9 @@ function rebuildTrustMini() {
     return;
   }
   tbody.innerHTML = S.nodes.map(n => {
-    const t   = S.trust[n] ?? 0.5;
-    const cls = t > 0.7 ? 'trust-high' : t > 0.4 ? 'trust-mid' : 'trust-low';
-    const status = t > 0.7 ? '✅ Healthy' : t > 0.4 ? '⚠ Normal' : '❌ Weak';
+    const t   = S.trust[n] ?? 0.9;
+    const cls = t > 0.8 ? 'trust-high' : t > 0.4 ? 'trust-mid' : 'trust-low';
+    const status = t > 0.8 ? '✅ Healthy' : t > 0.4 ? '⚠ Normal' : '❌ Weak';
     return `<tr>
       <td><strong>Node ${n}</strong></td>
       <td><span class="trust-pill ${cls}">${t.toFixed(3)}</span></td>

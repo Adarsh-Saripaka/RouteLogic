@@ -283,7 +283,9 @@ def _ml_score(features, strategy):
         return ml_prob, ml_prob
 
     delay, loss, bw, ld, trust = features
-    cost_val = (delay / 30.0) + (loss * 10.0) + ld + (1.0 - min(1.0, bw / 100.0)) + (1.0 - trust)
+    # Exponential trust penalty: as trust drops below 0.8, cost increases significantly
+    trust_penalty = (1.0 / (trust ** 2)) if trust > 0.1 else 100.0
+    cost_val = (delay / 30.0) + (loss * 10.0) + ld + (1.0 - min(1.0, bw / 100.0)) + trust_penalty
     cost_score = 1.0 / (1.0 + cost_val)
 
     if strategy == 'cost_only':
@@ -324,20 +326,21 @@ def select_best_path_ml(paths, strategy, trust_scores, fatigue_scores):
 
 def simulate_packets(path, num_packets, trust_scores, fatigue_scores):
     """
-    FIX: original skipped the destination node by using path[1:-1].
-    Correct loop is path[1:] — every node after the source must forward the packet.
+    FIX: simulation must check the entire path including the SOURCE node.
+    Correct loop is path[0:] — a compromised source node should inhibit sending.
     """
-    avg_trust  = float(np.mean([trust_scores.get(n, 0.5) for n in path]))
+    avg_trust  = float(np.mean([trust_scores.get(n, 0.9) for n in path]))
     congestion = min(2.0, (len(path) / 10) * (1.0 / max(avg_trust, 0.01)) * 0.1)
     ok = 0
     for _ in range(num_packets):
         success = True
-        for i, node in enumerate(path[1:]):
+        for i, node in enumerate(path): # Start from 0 to check source
             hop_cong  = congestion * (1.0 + 0.1 * i)
-            base_prob = trust_scores.get(node, 0.5)
-            fatigue_p = fatigue_scores.get(node, 0.0) * 0.35
-            cong_p    = min(0.5, hop_cong)
-            prob      = base_prob * (1.0 - cong_p) * (1.0 - fatigue_p)
+            base_prob = trust_scores.get(node, 0.9)
+            fatigue_p = fatigue_scores.get(node, 0.0) * 0.25
+            cong_p    = min(0.3, hop_cong)
+            # Use a more lenient probability model for healthy nodes
+            prob      = (base_prob ** 0.5) * (1.0 - cong_p) * (1.0 - fatigue_p)
             if np.random.random() >= max(0.0, prob):
                 success = False
                 break
@@ -517,7 +520,7 @@ def predict_api():
 
         # ── Ensure every node has trust & fatigue entries (int keys) ──────────
         for n in nodes:
-            trust_scores_global.setdefault(n, 0.5)
+            trust_scores_global.setdefault(n, 0.9)
             node_fatigue_global.setdefault(n, 0.0)
 
         # ── Select best path ──────────────────────────────────────────────────
@@ -622,7 +625,7 @@ def get_trust_values():
         # FIX: return string keys so frontend JSON.parse is consistent
         tv = {str(k): round(float(v), 4) for k, v in trust_scores_global.items()}
         avg = float(np.mean(list(trust_scores_global.values()))) \
-              if trust_scores_global else 0.0
+              if trust_scores_global else 0.9
         return safe_jsonify({
             'trust_values': tv,
             'total_nodes':  len(tv),

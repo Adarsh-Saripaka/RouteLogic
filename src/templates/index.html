@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Smart Routing ML System</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#030508;
+  --surface:#0b0f14;
+  --surface2:#111820;
+  --border:rgba(0,255,136,0.12);
+  --border-bright:rgba(0,255,136,0.45);
+  --green:#00ff88;
+  --green-dim:#00c46a;
+  --green-ghost:rgba(0,255,136,0.08);
+  --green-glow:rgba(0,255,136,0.25);
+  --red:#ff4466;
+  --yellow:#ffcc00;
+  --blue:#00aaff;
+  --txt:#d8ffe8;
+  --txt-dim:#7fa890;
+  --mono:'Space Mono',monospace;
+  --sans:'Syne',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  background-image:
+    radial-gradient(circle at 15% 50%,rgba(0,255,136,0.08),transparent 25%),
+    radial-gradient(circle at 85% 30%,rgba(0,170,255,0.08),transparent 25%);
+  color:var(--txt);
+  font-family:var(--sans);
+  min-height:100vh;
+  overflow-x:hidden
+}
+/* CRT scanline overlay */
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px)
+}
+
+/* ── Panel base styles ── */
+.left-panel{
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  background:rgba(11,15,20,0.65);
+}
+.right-panel{
+  background:rgba(3,5,8,0.85);
+  backdrop-filter:blur(6px);
+}
+.kpi,.trust-card,.anomaly-card,.qos-block,.explain-block,.event-item{
+  backdrop-filter:blur(8px);
+  background:rgba(11,15,20,0.7);
+  box-shadow:0 4px 20px rgba(0,0,0,0.25);
+  border:1px solid rgba(0,255,136,0.15);
+  transition:all 0.3s;
+}
+.kpi:hover,.trust-card:hover{
+  box-shadow:0 6px 28px rgba(0,255,136,0.15);
+  border-color:rgba(0,255,136,0.5);
+  transform:translateY(-3px);
+}
+
+/* ── Header ── */
+header{
+  text-align:center;
+  padding:48px 24px 32px;
+  position:relative;overflow:hidden;
+  border-bottom:1px solid var(--border);
+}
+header::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 900px 300px at 50% 100%,rgba(0,255,136,0.09) 0%,transparent 70%);
+  pointer-events:none
+}
+.header-badge{
+  display:inline-block;
+  font-family:var(--mono);font-size:.7rem;letter-spacing:4px;
+  color:var(--green);border:1px solid var(--border-bright);
+  padding:4px 14px;border-radius:2px;margin-bottom:18px;
+  text-transform:uppercase;
+  animation:badgePulse 3s ease-in-out infinite
+}
+@keyframes badgePulse{
+  0%,100%{box-shadow:0 0 0 rgba(0,255,136,0)}
+  50%{box-shadow:0 0 18px rgba(0,255,136,0.3)}
+}
+header h1{
+  font-size:clamp(2rem,5vw,3.6rem);
+  font-weight:800;color:#fff;letter-spacing:-1.5px;line-height:1.1;margin-bottom:10px
+}
+header h1 span{color:var(--green)}
+header p{font-size:.95rem;color:var(--txt-dim);font-family:var(--mono);letter-spacing:1px}
+
+/* ── Main grid ── */
+.main-grid{
+  display:grid;
+  grid-template-columns:380px 1fr;
+  gap:0;
+  min-height:calc(100vh - 220px)
+}
+.left-panel{
+  border-right:1px solid var(--border);
+  padding:28px 24px;
+  background:var(--surface);
+  overflow-y:auto;
+  display:flex;flex-direction:column;gap:24px
+}
+
+/* ── Panel title ── */
+.panel-title{
+  font-family:var(--mono);font-size:.65rem;letter-spacing:4px;
+  color:var(--green);text-transform:uppercase;
+  margin-bottom:16px;display:flex;align-items:center;gap:8px
+}
+.panel-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ── Form fields ── */
+.field{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+.field label{
+  font-family:var(--mono);font-size:.72rem;
+  color:var(--txt-dim);letter-spacing:1px;text-transform:uppercase
+}
+.field input,.field select{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:6px;
+  color:var(--txt);
+  font-family:var(--mono);font-size:.85rem;
+  padding:10px 14px;
+  transition:border-color .2s,box-shadow .2s;
+  width:100%
+}
+.field input:focus,.field select:focus{
+  outline:none;
+  border-color:var(--green);
+  box-shadow:0 0 0 2px rgba(0,255,136,0.15),0 0 20px rgba(0,255,136,0.1)
+}
+.field select option{background:var(--surface2)}
+
+/* ── Slider ── */
+.slider-wrap{display:flex;align-items:center;gap:12px}
+input[type=range]{
+  flex:1;
+  -webkit-appearance:none;
+  appearance:none;
+  height:4px;
+  background:linear-gradient(90deg,var(--green) var(--v,50%),var(--border) var(--v,50%));
+  border-radius:2px;
+  outline:none;
+  cursor:pointer;
+  border:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--green);border:2px solid var(--bg);cursor:pointer;
+  box-shadow:0 0 8px var(--green-glow)
+}
+.slider-num{
+  font-family:var(--mono);font-size:.9rem;color:var(--green);
+  background:var(--green-ghost);border:1px solid var(--border);
+  padding:4px 10px;border-radius:4px;min-width:36px;text-align:center
+}
+
+/* ── Node chip grid ── */
+.node-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px
+}
+.node-chip{
+  border:1px solid var(--border);background:transparent;
+  color:var(--txt-dim);font-family:var(--mono);font-size:.75rem;
+  padding:7px 4px;border-radius:4px;cursor:pointer;text-align:center;
+  transition:all .18s;white-space:nowrap
+}
+.node-chip:hover{border-color:var(--green);color:var(--green);background:var(--green-ghost)}
+.node-chip.selected{
+  border-color:var(--green);background:var(--green);color:#000;
+  font-weight:700;box-shadow:0 0 12px var(--green-glow)
+}
+
+/* ── Connection list ── */
+.conn-list{
+  background:var(--bg);border:1px dashed var(--border);
+  border-radius:6px;min-height:64px;padding:10px;
+  display:flex;flex-direction:column;gap:6px;
+  max-height:140px;overflow-y:auto
+}
+.conn-item{
+  display:flex;justify-content:space-between;align-items:center;
+  background:var(--green-ghost);border:1px solid var(--border);
+  border-left:3px solid var(--green);border-radius:4px;
+  padding:6px 10px;font-family:var(--mono);font-size:.75rem;color:var(--green)
+}
+.conn-item button{
+  background:rgba(255,68,102,0.15);border:1px solid rgba(255,68,102,0.3);
+  color:var(--red);font-family:var(--mono);font-size:.7rem;
+  padding:3px 8px;border-radius:3px;cursor:pointer;transition:all .15s
+}
+.conn-item button:hover{background:var(--red);color:#fff}
+.conn-empty{
+  color:var(--txt-dim);font-family:var(--mono);font-size:.75rem;
+  text-align:center;padding:10px 0
+}
+
+/* ── Buttons ── */
+.btn{
+  border:none;border-radius:6px;cursor:pointer;
+  font-family:var(--mono);font-size:.8rem;font-weight:700;
+  letter-spacing:1px;padding:12px 18px;text-transform:uppercase;
+  transition:all .2s;width:100%;display:block;text-align:center
+}
+.btn-run{
+  background:var(--green);color:#000;
+  box-shadow:0 4px 20px rgba(0,255,136,0.3);margin-bottom:8px
+}
+.btn-run:hover{
+  background:#00ffaa;
+  box-shadow:0 6px 28px rgba(0,255,136,0.45);
+  transform:translateY(-1px)
+}
+.btn-run:active{transform:translateY(0)}
+.btn-run:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-secondary{
+  background:transparent;color:var(--green);border:1px solid var(--border);
+}
+.btn-secondary:hover{border-color:var(--green);background:var(--green-ghost)}
+
+/* ── Right panel ── */
+.right-panel{display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Canvas section ── */
+.canvas-section{
+  padding:20px 24px 0;border-bottom:1px solid var(--border);
+  position:relative
+}
+.section-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.section-header h2{font-size:1rem;font-weight:700;color:#fff;letter-spacing:.5px}
+.section-header .dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--green);box-shadow:0 0 8px var(--green);
+  animation:blink 2s ease-in-out infinite
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+#networkCanvas{
+  width:100%;height:340px;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;display:block;
+}
+
+/* ── Stats bar ── */
+.stats-bar{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  border-bottom:1px solid var(--border)
+}
+.stat-cell{
+  padding:16px 20px;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;gap:4px
+}
+.stat-cell:last-child{border-right:none}
+.stat-cell .label{
+  font-family:var(--mono);font-size:.62rem;
+  color:var(--txt-dim);letter-spacing:2px;text-transform:uppercase
+}
+.stat-cell .value{font-family:var(--mono);font-size:1.3rem;color:var(--green);font-weight:700}
+
+/* ── Results area & tabs ── */
+.results-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.tab-bar{
+  display:flex;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0
+}
+.tab{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:2px;text-transform:uppercase;
+  color:var(--txt-dim);padding:14px 22px;cursor:pointer;
+  border:none;background:none;border-bottom:2px solid transparent;
+  transition:all .2s;position:relative
+}
+.tab:hover{color:var(--green)}
+.tab.active{color:var(--green);border-bottom-color:var(--green);background:var(--green-ghost)}
+.tab-pane{
+  display:none;padding:20px 24px;
+  overflow-y:auto;
+  max-height:calc(100vh - 660px);
+  min-height:200px
+}
+.tab-pane.active{display:block;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Empty state ── */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:40px;color:var(--txt-dim);font-family:var(--mono);
+  font-size:.8rem;letter-spacing:1px;gap:12px;text-align:center
+}
+.empty-state .icon{font-size:2.5rem;opacity:.4}
+
+/* ── KPI cards ── */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.kpi{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:16px;transition:all .3s
+}
+.kpi:hover{border-color:var(--border-bright);transform:translateY(-2px)}
+.kpi .kpi-label{
+  font-family:var(--mono);font-size:.62rem;color:var(--txt-dim);
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:6px
+}
+.kpi .kpi-val{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--green)}
+.kpi .kpi-sub{font-family:var(--mono);font-size:.7rem;color:var(--txt-dim);margin-top:4px}
+
+/* ── Data table ── */
+.data-table{
+  width:100%;border-collapse:collapse;
+  font-family:var(--mono);font-size:.78rem;margin-bottom:18px
+}
+.data-table th{
+  background:var(--surface2);color:var(--green);
+  font-size:.63rem;letter-spacing:2px;text-transform:uppercase;
+  padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)
+}
+.data-table td{
+  padding:10px 14px;
+  border-bottom:1px solid rgba(0,255,136,0.06);
+  color:var(--txt);vertical-align:middle
+}
+.data-table tbody tr:hover{background:var(--green-ghost)}
+.data-table td:first-child{color:var(--txt-dim)}
+
+/* ── Badges ── */
+.badge{
+  display:inline-block;font-family:var(--mono);font-size:.68rem;
+  padding:3px 9px;border-radius:3px;font-weight:700
+}
+.badge-green{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3)}
+.badge-red{background:rgba(255,68,102,.15);color:var(--red);border:1px solid rgba(255,68,102,.3)}
+.badge-yellow{background:rgba(255,204,0,.15);color:var(--yellow);border:1px solid rgba(255,204,0,.3)}
+.badge-blue{background:rgba(0,170,255,.15);color:var(--blue);border:1px solid rgba(0,170,255,.3)}
+
+/* ── Explain blocks ── */
+.explain-block{
+  background:var(--surface);border:1px solid var(--border);
+  border-left:3px solid var(--green);border-radius:6px;
+  padding:18px;margin-bottom:16px
+}
+.explain-block h4{
+  font-size:.85rem;color:var(--green);
+  margin-bottom:8px;font-family:var(--mono);letter-spacing:1px
+}
+.explain-block p{font-size:.82rem;color:var(--txt-dim);line-height:1.7}
+.explain-block .formula{
+  background:var(--bg);border:1px solid var(--border);border-radius:4px;
+  padding:10px 14px;font-family:var(--mono);font-size:.78rem;
+  color:#fff;margin:10px 0;letter-spacing:.5px
+}
+
+/* ── Event log ── */
+.event-scroll{
+  display:flex;flex-direction:column;gap:8px;
+  max-height:400px;overflow-y:auto;padding-right:4px
+}
+.event-item{
+  display:flex;gap:12px;align-items:flex-start;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:10px 14px;transition:all .2s
+}
+.event-item:hover{border-color:var(--border-bright);background:var(--surface2)}
+.event-item.level-error{border-left:3px solid var(--red);background:rgba(255,68,102,.04)}
+.event-item.level-warning{border-left:3px solid var(--yellow);background:rgba(255,204,0,.04)}
+.event-item.level-success{border-left:3px solid var(--green);background:rgba(0,255,136,.04)}
+.event-item.level-info{border-left:3px solid var(--blue)}
+.event-icon{font-size:1rem;flex-shrink:0;margin-top:1px}
+.event-body{flex:1}
+.event-time{font-family:var(--mono);font-size:.65rem;color:var(--txt-dim);margin-bottom:2px}
+.event-msg{font-family:var(--mono);font-size:.75rem;color:var(--txt);line-height:1.5}
+
+/* ── Trust cards ── */
+.trust-card-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+  gap:10px;margin-bottom:18px
+}
+.trust-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:14px;text-align:center;
+  transition:all .3s;position:relative;overflow:hidden
+}
+.trust-card.improved{border-color:rgba(0,255,136,.4)}
+.trust-card.declined{border-color:rgba(255,68,102,.4)}
+.trust-card .node-id{
+  font-family:var(--mono);font-size:.65rem;color:var(--txt-dim);
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:8px
+}
+.trust-card .trust-val{font-family:var(--mono);font-size:1.4rem;font-weight:700;margin-bottom:4px}
+.trust-card .trust-delta{font-family:var(--mono);font-size:.75rem;font-weight:700}
+.trust-card .trust-bar{height:4px;border-radius:2px;margin-top:10px;background:var(--border);overflow:hidden}
+.trust-card .trust-bar-fill{height:100%;border-radius:2px;background:var(--green);transition:width .6s ease}
+.trust-card.declined .trust-bar-fill{background:var(--red)}
+
+/* ── Anomaly cards ── */
+.anomaly-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:10px;margin-bottom:16px
+}
+.anomaly-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px
+}
+.anomaly-card.flagged{border-color:rgba(255,68,102,.5);background:rgba(255,68,102,.04)}
+.anomaly-card .a-node{
+  font-family:var(--mono);font-size:.65rem;letter-spacing:2px;
+  text-transform:uppercase;color:var(--txt-dim);margin-bottom:6px
+}
+.anomaly-card .a-score{font-family:var(--mono);font-size:1.1rem;font-weight:700}
+.anomaly-card .a-reason{font-family:var(--mono);font-size:.7rem;color:var(--txt-dim);margin-top:4px}
+
+/* ── QoS block ── */
+.qos-block{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px;margin-bottom:16px
+}
+.qos-block h4{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:2px;
+  text-transform:uppercase;color:var(--green);margin-bottom:12px
+}
+.qos-bars{display:flex;flex-direction:column;gap:10px}
+.qos-bar-row{display:flex;align-items:center;gap:12px}
+.qos-bar-label{font-family:var(--mono);font-size:.7rem;color:var(--txt-dim);width:100px;flex-shrink:0}
+.qos-bar-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.qos-bar-fill{height:100%;border-radius:3px;background:var(--green);transition:width .8s ease}
+.qos-bar-val{font-family:var(--mono);font-size:.7rem;color:var(--green);width:40px;text-align:right;flex-shrink:0}
+
+/* ── Trust mini table (sidebar) ── */
+.trust-mini-table{width:100%;font-family:var(--mono);font-size:.75rem;border-collapse:collapse}
+.trust-mini-table th{
+  font-size:.62rem;color:var(--txt-dim);letter-spacing:2px;text-transform:uppercase;
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)
+}
+.trust-mini-table td{
+  padding:7px 10px;border-bottom:1px solid rgba(0,255,136,.05);color:var(--txt)
+}
+.trust-mini-table tbody tr:hover{background:var(--green-ghost)}
+.trust-pill{display:inline-block;padding:3px 9px;border-radius:20px;font-weight:700;font-size:.7rem}
+.trust-high{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3)}
+.trust-mid{background:rgba(255,204,0,.15);color:var(--yellow);border:1px solid rgba(255,204,0,.3)}
+.trust-low{background:rgba(255,68,102,.15);color:var(--red);border:1px solid rgba(255,68,102,.3)}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,255,136,.3)}
+
+/* ── Flash toast ── */
+#flash{
+  position:fixed;top:20px;right:20px;z-index:10000;
+  font-family:var(--mono);font-size:.78rem;
+  padding:12px 20px;border-radius:6px;
+  display:none;animation:slideIn .3s ease;
+  pointer-events:none;
+}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+#flash.success{background:rgba(0,255,136,.15);color:var(--green);border:1px solid var(--border-bright)}
+#flash.error{background:rgba(255,68,102,.15);color:var(--red);border:1px solid rgba(255,68,102,.4)}
+
+/* ── Spinner ── */
+.spinner{
+  display:inline-block;width:14px;height:14px;
+  border:2px solid rgba(0,0,0,.3);border-top-color:#000;
+  border-radius:50%;animation:spin .7s linear infinite;
+  vertical-align:middle;margin-right:6px
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  .main-grid{grid-template-columns:1fr}
+  .left-panel{border-right:none;border-bottom:1px solid var(--border)}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .stats-bar{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<div id="flash"></div>
+
+<header>
+  <div class="header-badge">ML-Powered Network Protocol</div>
+  <h1>Smart <span>Routing</span> System</h1>
+  <p>// Trust-Based Path Optimization · Random Forest ML · QoS-Aware · Anomaly Detection</p>
+</header>
+
+<div class="main-grid">
+  <!-- ═══════════ LEFT PANEL ═══════════ -->
+  <div class="left-panel">
+
+    <!-- Network Setup -->
+    <div>
+      <div class="panel-title">Network Setup</div>
+
+      <div class="field">
+        <label>Number of Nodes</label>
+        <div class="slider-wrap">
+          <input type="range" id="nodeCount" min="3" max="15" value="5"
+            oninput="syncSlider(this); createNetwork(+this.value)" style="--v:28%"/>
+          <span class="slider-num" id="nodeCountVal">5</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Select Two Nodes → Auto-Connect</label>
+        <div class="node-grid" id="nodeGrid"></div>
+      </div>
+
+      <div class="field">
+        <label>Active Connections</label>
+        <div class="conn-list" id="connList">
+          <span class="conn-empty">No connections yet</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Simulation Parameters -->
+    <div>
+      <div class="panel-title">Simulation Parameters</div>
+
+      <div class="field">
+        <label>Routing Strategy</label>
+        <select id="strategy">
+          <option value="hybrid">Hybrid · 60% ML + 40% Cost</option>
+          <option value="ml_only">ML Only · Random Forest</option>
+          <option value="cost_only">Cost Only · Dijkstra-like</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>QoS Priority Class</label>
+        <select id="qosPriority">
+          <option value="best_effort">Best Effort</option>
+          <option value="premium">Premium</option>
+          <option value="real_time">Real-Time (VoIP/Video)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Packet Count</label>
+        <input type="number" id="numPackets" value="10" min="1" max="100"/>
+      </div>
+
+      <div class="field">
+        <label>Source Node</label>
+        <select id="sourceNode"></select>
+      </div>
+
+      <div class="field">
+        <label>Destination Node</label>
+        <select id="destNode"></select>
+      </div>
+
+      <button type="button" class="btn btn-run" id="runBtn" onclick="runPrediction(event)">▶ Run ML Prediction</button>
+      <button type="button" class="btn btn-secondary" onclick="resetAll()">↺ Reset Network</button>
+    </div>
+
+    <!-- Chaos Engineering -->
+    <div>
+      <div class="panel-title" style="color:var(--red)"><span style="color:var(--red)">🚨 DDoS / Chaos Test</span></div>
+      <div class="field">
+        <label style="color:var(--txt-dim)">Select Target Node to Compromise</label>
+        <select id="chaosNode" style="border-color:rgba(255,68,102,0.4)"></select>
+      </div>
+      <button type="button" class="btn btn-run" style="background:var(--red); color:#fff; box-shadow:0 4px 20px rgba(255,68,102,0.3)" onclick="injectChaos()">⚡ INJECT NODE FAILURE</button>
+    </div>
+
+    <!-- Live Trust Scores -->
+    <div>
+      <div class="panel-title">Live Trust Scores</div>
+      <table class="trust-mini-table">
+        <thead>
+          <tr><th>Node</th><th>Score</th><th>Status</th></tr>
+        </thead>
+        <tbody id="trustMiniBody">
+          <tr><td colspan="3" style="color:var(--txt-dim);text-align:center;padding:12px">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /left-panel -->
+
+  <!-- ═══════════ RIGHT PANEL ═══════════ -->
+  <div class="right-panel">
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+      <div class="stat-cell"><span class="label">Nodes</span><span class="value" id="sNodes">5</span></div>
+      <div class="stat-cell"><span class="label">Edges</span><span class="value" id="sEdges">0</span></div>
+      <div class="stat-cell"><span class="label">Avg Trust</span><span class="value" id="sTrust">0.500</span></div>
+      <div class="stat-cell"><span class="label">ML Model</span><span class="value" style="font-size:.9rem;padding-top:4px;color:var(--green)">RForest ✓</span></div>
+    </div>
+
+    <!-- Network canvas -->
+    <div class="canvas-section">
+      <div class="section-header">
+        <div class="dot"></div>
+        <h2>Network Topology Visualization</h2>
+      </div>
+      <canvas id="networkCanvas"></canvas>
+    </div>
+
+    <!-- Tab results area -->
+    <div class="results-area">
+      <div class="tab-bar">
+        <button class="tab active" data-tab="results"  onclick="switchTab(this,'results')">Results</button>
+        <button class="tab"        data-tab="events"   onclick="switchTab(this,'events')">Event Log</button>
+        <button class="tab"        data-tab="trust"    onclick="switchTab(this,'trust')">Trust Changes</button>
+        <button class="tab"        data-tab="anomaly"  onclick="switchTab(this,'anomaly')">Anomaly &amp; QoS</button>
+      </div>
+
+      <div class="tab-pane active" id="tab-results">
+        <div id="resultsInner">
+          <div class="empty-state">
+            <span class="icon">⚡</span>
+            Configure your network, add connections, then click Run ML Prediction
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab-events">
+        <div class="event-scroll" id="eventScroll">
+          <div class="empty-state" style="padding:20px">
+            <span class="icon">📋</span>Events will appear here after prediction
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab-trust">
+        <div id="trustChangesInner">
+          <div class="empty-state">
+            <span class="icon">🔐</span>Trust comparison appears after simulation
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab-anomaly">
+        <div id="anomalyInner">
+          <div class="empty-state">
+            <span class="icon">🛡️</span>Anomaly detection &amp; QoS metrics appear after simulation
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /results-area -->
+  </div><!-- /right-panel -->
+</div><!-- /main-grid -->
+
+<script>
+/* ═══════════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════════ */
+const BACKEND = 'http://127.0.0.1:5000';
+
+/* ═══════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════ */
+const S = {
+  nodes: [],
+  edges: [],
+  trust: {},
+  selectedForEdge: [],
+  highlightPath: null,
+  compromisedNodes: new Set()
+};
+
+const canvas = document.getElementById('networkCanvas');
+const ctx    = canvas.getContext('2d');
+let nodePositions = {};
+
+/* ═══════════════════════════════════════════════════
+   SLIDER SYNC
+═══════════════════════════════════════════════════ */
+function syncSlider(el) {
+  const min = +el.min, max = +el.max, val = +el.value;
+  const pct = ((val - min) / (max - min) * 100).toFixed(1) + '%';
+  el.style.setProperty('--v', pct);
+  document.getElementById('nodeCountVal').textContent = val;
+}
+syncSlider(document.getElementById('nodeCount'));
+
+/* ═══════════════════════════════════════════════════
+   NETWORK INIT
+═══════════════════════════════════════════════════ */
+function createNetwork(count) {
+  S.nodes            = Array.from({length: count}, (_, i) => i);
+  S.edges            = [];
+  S.trust            = {};
+  S.selectedForEdge  = [];
+  S.highlightPath    = null;                          // FIX: clear stale path
+  S.compromisedNodes.clear();
+  S.nodes.forEach(n => S.trust[n] = 0.5);
+  rebuildNodeGrid();
+  rebuildSelectors();
+  updateStats();
+  computePositions();
+  draw();
+  addLocalEvent('info', '🌐', `Network initialized with ${count} nodes. Add connections to begin.`);
+}
+
+function computePositions() {
+  resizeCanvas();
+  const W = canvas.width, H = canvas.height;
+  const pad = 60;
+  nodePositions = {};
+  const n    = S.nodes.length;
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  S.nodes.forEach((node, idx) => {
+    const row = Math.floor(idx / cols);
+    const col = idx % cols;
+    // Deterministic jitter so layout is stable on re-draw
+    const jx = Math.sin(node * 2.3 + 1) * 0.25;
+    const jy = Math.cos(node * 1.7 + 2) * 0.25;
+    nodePositions[node] = {
+      x: pad + (col + 0.5 + jx) * (W - pad * 2) / cols,
+      y: pad + (row + 0.5 + jy) * (H - pad * 2) / rows   // FIX: use `rows` not `Math.ceil(n/cols)` inline
+    };
+  });
+}
+
+function resizeCanvas() {
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight || 340;
+}
+
+/* ═══════════════════════════════════════════════════
+   DRAW
+═══════════════════════════════════════════════════ */
+function draw(path) {
+  resizeCanvas();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!S.nodes.length) return;
+
+  const r = Math.max(18, Math.min(28, canvas.width / (S.nodes.length * 3.5)));
+
+  // Draw edges
+  S.edges.forEach(([a, b]) => {
+    const p1 = nodePositions[a], p2 = nodePositions[b];
+    if (!p1 || !p2) return;
+
+    const onPath = Array.isArray(path) && path.some(
+      (_, i) => i < path.length - 1 &&
+        ((path[i] === a && path[i+1] === b) || (path[i] === b && path[i+1] === a))
+    );
+
+    ctx.save();
+    if (onPath) {
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth   = 3.5;
+      ctx.shadowColor = '#00ff88';
+      ctx.shadowBlur  = 14;
+    } else {
+      ctx.strokeStyle = 'rgba(0,255,136,0.18)';
+      ctx.lineWidth   = 1.5;
+      ctx.shadowBlur  = 0;
+    }
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Draw nodes
+  S.nodes.forEach(node => {
+    const pos = nodePositions[node];
+    if (!pos) return;
+
+    const trust  = S.trust[node] ?? 0.5;
+    const onPath = Array.isArray(path) && path.includes(node);
+    const isCompromised = S.compromisedNodes.has(node);
+    const hue    = trust * 120;               // 0 = red, 120 = green
+    const col    = `hsl(${hue},90%,55%)`;
+
+    ctx.save();
+    if (isCompromised) {
+      ctx.shadowColor = '#ff4466';
+      ctx.shadowBlur  = 25;
+      ctx.strokeStyle = '#ff4466';
+      ctx.lineWidth   = 3.5;
+    } else if (onPath) { 
+      ctx.shadowColor = '#00ff88'; 
+      ctx.shadowBlur  = 20; 
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth   = 2.5;
+    } else { 
+      ctx.shadowBlur  = 0; 
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.lineWidth   = 1.5;
+    }
+
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+    ctx.fillStyle   = isCompromised ? 'rgba(255,68,102,0.65)' : col;
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Node label
+    ctx.fillStyle    = '#000';
+    ctx.font         = `bold ${Math.max(10, r * 0.55)}px 'Space Mono',monospace`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(node), pos.x, pos.y - 1);
+
+    // Trust value below node
+    ctx.fillStyle    = '#fff';                         // FIX: was left as '#000' in original — white is readable on canvas
+    ctx.font         = `${Math.max(8, r * 0.38)}px 'Space Mono',monospace`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(trust.toFixed(2), pos.x, pos.y + r + 4);
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   NODE CHIP GRID
+═══════════════════════════════════════════════════ */
+function rebuildNodeGrid() {
+  const grid = document.getElementById('nodeGrid');
+  grid.innerHTML = '';
+  S.nodes.forEach(n => {
+    const btn = document.createElement('button');
+    btn.className   = 'node-chip';
+    btn.textContent = `N${n}`;
+    btn.dataset.node = n;
+    btn.onclick = () => toggleNodeForEdge(n, btn);
+    grid.appendChild(btn);
+  });
+}
+
+function toggleNodeForEdge(node, btn) {
+  const idx = S.selectedForEdge.indexOf(node);
+  if (idx > -1) {
+    S.selectedForEdge.splice(idx, 1);
+    btn.classList.remove('selected');
+    return;
+  }
+  if (S.selectedForEdge.length >= 2) {
+    flash('Select exactly 2 nodes for a connection', 'error');
+    return;
+  }
+  S.selectedForEdge.push(node);
+  btn.classList.add('selected');
+  if (S.selectedForEdge.length === 2) createEdge();
+}
+
+function createEdge() {
+  const [a, b] = [...S.selectedForEdge].sort((x, y) => x - y); // FIX: spread before sort to avoid mutating state array
+  S.selectedForEdge = [];
+  document.querySelectorAll('.node-chip.selected').forEach(el => el.classList.remove('selected'));
+
+  if (S.edges.some(([x, y]) => x === a && y === b)) {
+    flash('Connection already exists', 'error');
+    return;
+  }
+  S.edges.push([a, b]);
+  rebuildConnList();
+  updateStats();
+  draw(S.highlightPath);  // FIX: preserve current highlighted path when redrawing after edge changes
+  addLocalEvent('info', '🔗', `Connection added: Node ${a} ↔ Node ${b}`);
+}
+
+function rebuildConnList() {
+  const list = document.getElementById('connList');
+  if (!S.edges.length) {
+    list.innerHTML = '<span class="conn-empty">No connections yet</span>';
+    return;
+  }
+  list.innerHTML = S.edges.map(([a, b], i) =>
+    `<div class="conn-item">
+       <span>N${a} ↔ N${b}</span>
+       <button onclick="removeEdge(${i})">✕</button>
+     </div>`
+  ).join('');
+}
+
+function removeEdge(i) {
+  S.edges.splice(i, 1);
+  rebuildConnList();
+  updateStats();
+  draw(S.highlightPath);  // FIX: preserve highlighted path
+}
+
+/* ═══════════════════════════════════════════════════
+   SELECTORS & STATS
+═══════════════════════════════════════════════════ */
+function rebuildSelectors() {
+  ['sourceNode', 'destNode', 'chaosNode'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = S.nodes.map(n => `<option value="${n}">Node ${n}</option>`).join('');
+  });
+  // Default destination to second node
+  if (S.nodes.length > 1) {
+    document.getElementById('destNode').value = S.nodes[1];
+  }
+}
+
+function updateStats() {
+  document.getElementById('sNodes').textContent = S.nodes.length;
+  document.getElementById('sEdges').textContent = S.edges.length;
+  const avg = S.nodes.length
+    ? (S.nodes.reduce((s, n) => s + (S.trust[n] ?? 0.5), 0) / S.nodes.length).toFixed(3)
+    : '0.500';
+  document.getElementById('sTrust').textContent = avg;
+  rebuildTrustMini();
+}
+
+function rebuildTrustMini() {
+  const tbody = document.getElementById('trustMiniBody');
+  if (!S.nodes.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="color:var(--txt-dim);text-align:center;padding:12px">—</td></tr>';
+    return;
+  }
+  tbody.innerHTML = S.nodes.map(n => {
+    const t   = S.trust[n] ?? 0.5;
+    const cls = t > 0.7 ? 'trust-high' : t > 0.4 ? 'trust-mid' : 'trust-low';
+    const status = t > 0.7 ? '✅ Healthy' : t > 0.4 ? '⚠ Normal' : '❌ Weak';
+    return `<tr>
+      <td><strong>Node ${n}</strong></td>
+      <td><span class="trust-pill ${cls}">${t.toFixed(3)}</span></td>
+      <td style="font-size:.72rem;color:var(--txt-dim)">${status}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════════ */
+function switchTab(btn, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════
+   LOCAL EVENT LOG
+═══════════════════════════════════════════════════ */
+function addLocalEvent(level, icon, msg) {
+  const scroll = document.getElementById('eventScroll');
+  scroll.querySelector('.empty-state')?.remove();
+  const ts = new Date().toLocaleTimeString();
+  const el = document.createElement('div');
+  el.className = `event-item level-${level}`;
+  el.innerHTML = `
+    <span class="event-icon">${icon}</span>
+    <div class="event-body">
+      <div class="event-time">${ts}</div>
+      <div class="event-msg">${msg}</div>
+    </div>`;
+  scroll.appendChild(el);
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+/* ═══════════════════════════════════════════════════
+   FLASH TOAST
+═══════════════════════════════════════════════════ */
+function flash(msg, type = 'success') {
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.className   = type;
+  el.style.display = 'block';
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => { el.style.display = 'none'; }, 3200);
+}
+
+/* ═══════════════════════════════════════════════════
+   RUN PREDICTION  (main API call)
+═══════════════════════════════════════════════════ */
+async function runPrediction(event) {
+  if (event) event.preventDefault();
+  const source  = parseInt(document.getElementById('sourceNode').value);
+  const dest    = parseInt(document.getElementById('destNode').value);
+  const numPkt  = parseInt(document.getElementById('numPackets').value);
+  const strat   = document.getElementById('strategy').value;
+  const qos     = document.getElementById('qosPriority').value;
+
+  if (source === dest)   { flash('Source and destination must differ', 'error'); return; }
+  if (!S.edges.length)   { flash('Add at least one connection', 'error');        return; }
+  if (numPkt < 1)        { flash('Packet count must be ≥ 1', 'error');           return; }
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Computing…';
+
+  addLocalEvent('info', '🚀',
+    `Prediction request: Node ${source} → Node ${dest} | Strategy: ${strat} | QoS: ${qos}`);
+
+  try {
+    const resp = await fetch(`${BACKEND}/api/predict`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept':        'application/json'
+      },
+      body: JSON.stringify({
+        source,
+        dest,
+        num_packets:  numPkt,
+        strategy:     strat,
+        qos_priority: qos,
+        nodes:        S.nodes,
+        edges:        S.edges
+      })
+    });
+
+    // Read as text first — gives a readable error if not JSON
+    const text = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      console.error('Backend returned non-JSON:', text.slice(0, 300));
+      flash('Backend error: invalid JSON response', 'error');
+      addLocalEvent('error', '❌', 'Non-JSON response from backend. Check Flask is running on port 5000.');
+      return;
+    }
+
+    if (!resp.ok || data.error) {
+      flash('Error: ' + (data.error || resp.statusText), 'error');
+      addLocalEvent('error', '❌', data.error || `HTTP ${resp.status}`);
+      return;
+    }
+
+    // Apply updated trust scores to state
+    Object.entries(data.trust_after).forEach(([k, v]) => {
+      S.trust[+k] = v;
+    });
+
+    // FIX: store path in S.highlightPath so redraws (e.g. window resize) retain it
+    S.highlightPath = data.best_path || null;
+
+    updateStats();
+    draw(S.highlightPath);
+    renderResults(data);
+    renderEventLog(data.event_log || []);
+    renderTrustChanges(data);
+    renderAnomalyQoS(data);
+
+    flash('✅ Prediction complete!', 'success');
+    switchTab(document.querySelector('[data-tab="results"]'), 'results');
+
+  } catch (e) {
+    flash('Network error: ' + e.message, 'error');
+    addLocalEvent('error', '❌',
+      'Request failed: ' + e.message + ' — Is Flask running on port 5000?');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '▶ Run ML Prediction';
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   RENDER — RESULTS TAB
+═══════════════════════════════════════════════════ */
+function renderResults(data) {
+  const pm      = data.path_metrics || {};
+  const sr      = ((data.success_rate  || 0) * 100).toFixed(1);
+  const path    = data.best_path || [];
+  const pathStr = path.join(' → ');
+  const delay   = (pm.avg_delay   || 0).toFixed(2);
+  const loss    = ((pm.packet_loss || 0) * 100).toFixed(3);
+  const bw      = (pm.bandwidth   || 0).toFixed(1);
+  const load    = ((pm.load       || 0) * 100).toFixed(1);
+  const trust   = (pm.trust_avg   || 0).toFixed(3);
+  const reward  = data.reward_signal  || 0;
+  const mlProb  = data.ml_probability || 0.5;
+  const qos     = data.qos_metrics    || {};
+
+  const slaBadge = qos.sla_met
+    ? '<span class="badge badge-green">SLA MET</span>'
+    : '<span class="badge badge-red">SLA VIOLATED</span>';
+
+  document.getElementById('resultsInner').innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">Success Rate</div>
+        <div class="kpi-val" style="color:${+sr > 70 ? 'var(--green)' : 'var(--red)'}">${sr}%</div>
+        <div class="kpi-sub">${data.successful_packets ?? '?'}/${data.num_packets ?? '?'} packets</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Reward Signal</div>
+        <div class="kpi-val">${reward.toFixed(4)}</div>
+        <div class="kpi-sub">Trust update driver</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">ML Confidence</div>
+        <div class="kpi-val" style="color:var(--blue)">${(mlProb * 100).toFixed(1)}%</div>
+        <div class="kpi-sub">Multiplier: M=${(0.5 + mlProb).toFixed(2)}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Path Selected</div>
+        <div class="kpi-val" style="font-size:1.2rem;margin-top:6px">${Math.max(0, path.length - 1)} Hops</div>
+        <div class="kpi-sub" style="font-size:0.6rem">${pathStr || '—'}</div>
+      </div>
+    </div>
+
+    <table class="data-table">
+      <thead><tr><th>Network Metric</th><th>Value</th><th>Quality</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Avg Delay</td><td>${delay} ms</td>
+          <td>${+delay < 8
+                ? '<span class="badge badge-green">LOW</span>'
+                : +delay < 15
+                  ? '<span class="badge badge-yellow">MEDIUM</span>'
+                  : '<span class="badge badge-red">HIGH</span>'}</td>
+        </tr>
+        <tr>
+          <td>Packet Loss</td><td>${loss}%</td>
+          <td>${+loss < 1
+                ? '<span class="badge badge-green">GOOD</span>'
+                : +loss < 5
+                  ? '<span class="badge badge-yellow">FAIR</span>'
+                  : '<span class="badge badge-red">POOR</span>'}</td>
+        </tr>
+        <tr>
+          <td>Bandwidth</td><td>${bw} Mbps</td>
+          <td>${+bw > 50
+                ? '<span class="badge badge-green">HIGH</span>'
+                : +bw > 20
+                  ? '<span class="badge badge-yellow">MEDIUM</span>'
+                  : '<span class="badge badge-red">LOW</span>'}</td>
+        </tr>
+        <tr>
+          <td>Link Load</td><td>${load}%</td>
+          <td>${+load < 40
+                ? '<span class="badge badge-green">LIGHT</span>'
+                : +load < 70
+                  ? '<span class="badge badge-yellow">MODERATE</span>'
+                  : '<span class="badge badge-red">CONGESTED</span>'}</td>
+        </tr>
+        <tr>
+          <td>Avg Path Trust</td><td>${trust}</td>
+          <td>${+trust > 0.7
+                ? '<span class="badge badge-green">TRUSTED</span>'
+                : +trust > 0.4
+                  ? '<span class="badge badge-yellow">NORMAL</span>'
+                  : '<span class="badge badge-red">UNTRUSTED</span>'}</td>
+        </tr>
+        <tr>
+          <td>QoS Score</td>
+          <td>${(qos.qos_score || 0).toFixed(4)}</td>
+          <td>${slaBadge}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="explain-block" style="border-left-color:var(--blue);background:rgba(0,170,255,0.04)">
+      <h4 style="color:var(--blue)">✨ The "Perfect Formula" In Action</h4>
+      <p>ML engine evaluated delivery probability at <strong>${(mlProb * 100).toFixed(1)}%</strong>.
+         This confidence feeds into the Perfect Trust Formula:</p>
+      <div class="formula" style="border-color:rgba(0,170,255,0.3)">
+        T_new = T_old + α · M · (R − T_old) · (1 − T_old · β)
+      </div>
+      <p>Multiplier <strong>M = ${(0.5 + mlProb).toFixed(2)}</strong> — high confidence accelerates trust
+         growth; uncertainty dampens volatile rewards.</p>
+    </div>
+
+    <div class="explain-block">
+      <h4>🚀 Non-Traditional Features Active</h4>
+      <p style="margin-bottom:8px">
+        <strong>1. ML-Weighted Perfect Formula:</strong> The ML model's confidence is injected directly into
+        the trust multiplier M, creating a consensus between the prediction and the reward signal before
+        updating router trust.
+      </p>
+      <p>
+        <strong>2. Node Fatigue (Entropy):</strong> Repeated use of the same router increases its fatigue
+        score, applying a probability penalty and enforcing dynamic load balancing without any explicit
+        protocol configuration.
+      </p>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   RENDER — EVENT LOG TAB
+═══════════════════════════════════════════════════ */
+function renderEventLog(events) {
+  const scroll = document.getElementById('eventScroll');
+  scroll.innerHTML = '';
+
+  if (!events.length) {
+    scroll.innerHTML =
+      '<div class="empty-state" style="padding:20px"><span class="icon">📋</span>No events</div>';
+    return;
+  }
+
+  events.forEach(ev => {
+    const el = document.createElement('div');
+    el.className = `event-item level-${ev.level || 'info'}`;
+    el.innerHTML = `
+      <span class="event-icon">${ev.icon || '•'}</span>
+      <div class="event-body">
+        <div class="event-time">${ev.time || ''}</div>
+        <div class="event-msg">${ev.msg  || ''}</div>
+      </div>`;
+    scroll.appendChild(el);
+  });
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+/* ═══════════════════════════════════════════════════
+   RENDER — TRUST CHANGES TAB
+═══════════════════════════════════════════════════ */
+function renderTrustChanges(data) {
+  const before = data.trust_before || {};
+  const after  = data.trust_after  || {};
+
+  // FIX: robust key lookup — backend may use string or numeric keys
+  const getBefore = n => +(before[n] ?? before[String(n)] ?? 0.5);
+  const getAfter  = n => +(after[n]  ?? after[String(n)]  ?? 0.5);
+
+  const cards = S.nodes.map(n => {
+    const b    = getBefore(n);
+    const a    = getAfter(n);
+    const d    = a - b;
+    const cls  = d >  0.001 ? 'improved' : d < -0.001 ? 'declined' : '';
+    const dStr = (d >= 0 ? '+' : '') + d.toFixed(4);
+    const dCol = d >  0.001 ? 'var(--green)' : d < -0.001 ? 'var(--red)' : 'var(--txt-dim)';
+    const barW = Math.round(a * 100);
+    const onPath = Array.isArray(data.best_path) && data.best_path.includes(n);
+    return `<div class="trust-card ${cls}">
+      ${onPath
+        ? '<div style="position:absolute;top:8px;right:8px;font-size:.6rem;color:var(--green);font-family:var(--mono)">ON PATH</div>'
+        : ''}
+      <div class="node-id">Node ${n}</div>
+      <div class="trust-val" style="color:${dCol}">${a.toFixed(4)}</div>
+      <div class="trust-delta" style="color:${dCol}">${dStr} from ${b.toFixed(4)}</div>
+      <div class="trust-bar">
+        <div class="trust-bar-fill" style="width:${barW}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const tableRows = S.nodes.map(n => {
+    const b = getBefore(n);
+    const a = getAfter(n);
+    const d = a - b;
+    const status = d >  0.001
+      ? '<span class="badge badge-green">↑ Improved</span>'
+      : d < -0.001
+        ? '<span class="badge badge-red">↓ Declined</span>'
+        : '<span class="badge" style="background:rgba(255,255,255,.05);color:var(--txt-dim);border:1px solid var(--border)">→ Stable</span>';
+    return `<tr>
+      <td><strong>Node ${n}</strong></td>
+      <td><span class="trust-pill ${b > 0.7 ? 'trust-high' : b > 0.4 ? 'trust-mid' : 'trust-low'}">${b.toFixed(4)}</span></td>
+      <td><span class="trust-pill ${a > 0.7 ? 'trust-high' : a > 0.4 ? 'trust-mid' : 'trust-low'}">${a.toFixed(4)}</span></td>
+      <td style="font-family:var(--mono);font-size:.75rem;color:${d > 0 ? 'var(--green)' : d < 0 ? 'var(--red)' : 'var(--txt-dim)'}">${(d >= 0 ? '+' : '')}${d.toFixed(4)}</td>
+      <td>${status}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('trustChangesInner').innerHTML = `
+    <div class="trust-card-grid">${cards}</div>
+    <div class="explain-block" style="border-left-color:var(--yellow);background:rgba(255,204,0,0.04)">
+      <h4 style="color:var(--yellow)">🔐 The Perfect Formula</h4>
+      <div class="formula" style="border-color:rgba(255,204,0,0.3)">
+        T_new = T_old + α · M · (R − T_old) · (1 − T_old · β)
+      </div>
+      <p>
+        Reward R = ${(data.reward_signal ?? 0).toFixed(4)}
+        &nbsp;|&nbsp;
+        ML Multiplier M = ${(0.5 + (data.ml_probability || 0.5)).toFixed(2)}
+      </p>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Node</th><th>Before</th><th>After</th><th>Change</th><th>Status</th></tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   RENDER — ANOMALY & QoS TAB
+═══════════════════════════════════════════════════ */
+function renderAnomalyQoS(data) {
+  const anomalies = data.anomaly_detection || {};
+  const qos       = data.qos_metrics      || {};
+  const path      = data.best_path        || [];
+
+  const anomalyCards = path.map(n => {
+    const info = anomalies[String(n)] || {
+      score: 0, flagged: false, trust: 0.5, reason: 'Normal', fatigue: 0
+    };
+    const flagClass   = info.flagged ? 'flagged' : '';
+    const icon        = info.flagged ? '🚨' : '✅';
+    const col         = info.flagged ? 'var(--red)' : 'var(--green)';
+    const fatiguePct  = ((info.fatigue || 0) * 100).toFixed(0);
+    const fColor      = (info.fatigue || 0) > 0.4 ? 'var(--yellow)' : 'var(--green)';
+    return `<div class="anomaly-card ${flagClass}">
+      <div class="a-node">Node ${n} ${icon}</div>
+      <div class="a-score" style="color:${col}">Score: ${info.score}</div>
+      <div class="a-reason">Trust: ${typeof info.trust === 'number' ? info.trust.toFixed(3) : info.trust} — ${info.reason}</div>
+      <div style="margin-top:8px;font-family:var(--mono);font-size:.6rem;color:var(--txt-dim);display:flex;justify-content:space-between">
+        <span>FATIGUE</span><span style="color:${fColor}">${fatiguePct}%</span>
+      </div>
+      <div class="trust-bar" style="margin-top:4px">
+        <div class="trust-bar-fill" style="width:${fatiguePct}%;background:${fColor}"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const bd = qos.breakdown || {};
+  const qosBars = [
+    ['Delay',     bd.delay_score     ?? 0],
+    ['Loss',      bd.loss_score      ?? 0],
+    ['Bandwidth', bd.bandwidth_score ?? 0],
+    ['Load',      bd.load_score      ?? 0]
+  ].map(([label, val]) =>
+    `<div class="qos-bar-row">
+      <span class="qos-bar-label">${label}</span>
+      <div class="qos-bar-track">
+        <div class="qos-bar-fill" style="width:${(val * 100).toFixed(1)}%"></div>
+      </div>
+      <span class="qos-bar-val">${(val * 100).toFixed(1)}%</span>
+    </div>`
+  ).join('');
+
+  const slaColor = qos.sla_met ? 'var(--green)' : 'var(--red)';
+  const slaLabel = qos.sla_met ? '✅ SLA MET'    : '❌ SLA VIOLATED';
+  const prioLabel = (qos.priority || 'best_effort')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+
+  document.getElementById('anomalyInner').innerHTML = `
+    <div class="explain-block" style="margin-bottom:16px">
+      <h4>🛡️ Anomaly Detection</h4>
+      <p>Each router is assigned an anomaly score = max(0, (0.5 − trust) × 2).
+         Nodes whose trust drops below 0.4 are flagged as potentially congested or misbehaving.</p>
+    </div>
+
+    <div class="anomaly-grid">
+      ${anomalyCards || '<p style="color:var(--txt-dim);font-family:var(--mono);font-size:.8rem">No path nodes.</p>'}
+    </div>
+
+    <div class="qos-block">
+      <h4>
+        QoS Class: ${prioLabel} —
+        Score: <span style="color:${slaColor}">${(qos.qos_score || 0).toFixed(4)}</span>
+        · ${slaLabel}
+      </h4>
+      <div class="qos-bars">${qosBars}</div>
+    </div>
+
+    <div class="explain-block">
+      <h4>📶 QoS-Aware Routing</h4>
+      <p>
+        <strong>Real-Time</strong> traffic weights delay at 60%, loss at 30%.
+        <strong>Premium</strong> balances all four factors equally.
+        <strong>Best Effort</strong> prioritises bandwidth and load.
+        Each path is scored per class and must exceed a 0.60 SLA threshold.
+      </p>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESET
+═══════════════════════════════════════════════════ */
+function resetAll() {
+  const slider = document.getElementById('nodeCount');
+  slider.value = 5;
+  syncSlider(slider);
+  createNetwork(5);
+
+  ['resultsInner', 'trustChangesInner', 'anomalyInner'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML =
+      '<div class="empty-state"><span class="icon">⚡</span>Reset complete. Configure and run a new prediction.</div>';
+  });
+  document.getElementById('eventScroll').innerHTML =
+    '<div class="empty-state" style="padding:20px"><span class="icon">📋</span>Events will appear here after prediction</div>';
+
+  flash('Network reset', 'success');
+}
+
+/* ═══════════════════════════════════════════════════
+   CHAOS INJECTION
+═══════════════════════════════════════════════════ */
+async function injectChaos() {
+  const target = parseInt(document.getElementById('chaosNode').value);
+  if (isNaN(target)) return;
+  
+  try {
+    const resp = await fetch(`${BACKEND}/api/chaos-inject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ target_node: target })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error);
+    
+    S.compromisedNodes.add(target);
+    S.trust[target] = 0.05;
+    
+    flash(`🚨 DDoS Attack successful on Node ${target}!`, 'error');
+    addLocalEvent('error', '⚡', `CHAOS INJECTED: Node ${target} overloaded. Trust crushed, Fatigue maxed.`);
+    updateStats();
+    draw(S.highlightPath);
+  } catch (e) {
+    flash('Chaos injection failed: ' + e.message, 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   LOAD TRUST FROM BACKEND (optional, non-blocking)
+═══════════════════════════════════════════════════ */
+async function loadTrustFromBackend() {
+  try {
+    const r = await fetch(`${BACKEND}/api/trust-values`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.status === 'success') {
+      Object.entries(d.trust_values).forEach(([k, v]) => {
+        const n = +k;
+        if (S.nodes.includes(n)) S.trust[n] = v;
+      });
+      updateStats();
+      draw(S.highlightPath);
+    }
+  } catch {
+    // Flask not yet started or CORS not ready — safe to ignore
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════ */
+window.addEventListener('resize', () => {
+  computePositions();
+  draw(S.highlightPath);
+});
+
+createNetwork(5);
+loadTrustFromBackend();
+</script>
+</body>
+</html>

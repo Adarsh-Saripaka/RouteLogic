@@ -2247,7 +2247,7 @@
     /* ═══════════════════════════════════════════════════
        RESET
     ═══════════════════════════════════════════════════ */
-    function resetAll() {
+    async function resetAll() {
       const slider = document.getElementById('nodeCount');
       slider.value = 5;
       syncSlider(slider);
@@ -2260,6 +2260,13 @@
       });
       document.getElementById('eventScroll').innerHTML =
         '<div class="empty-state" style="padding:20px"><span class="icon">📋</span>Events will appear here after prediction</div>';
+
+      try {
+        await fetch(`${BACKEND}/api/reset`, { method: 'POST' });
+        loadTrustFromBackend();
+      } catch (e) {
+        console.error("Backend reset failed:", e);
+      }
 
       flash('Network reset', 'success');
     }

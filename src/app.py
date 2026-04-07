@@ -278,21 +278,36 @@ def generate_path_metrics(path):
     dyn_rng  = np.random.default_rng()  # Dynamic variance per simulation
 
     num_hops = max(1, len(path) - 1)
-    distances = base_rng.uniform(0.5, 3.0, num_hops)
-    total_dist = float(distances.sum())
+    
+    # Decouple metrics so that the shortest paths don't automatically win everywhere.
+    # This allows Cost_Only (delay focus) vs ML_Only (holistic focus) to pick different routes!
+    hop_seed1 = int(abs(hash("distance" + str(tuple(path)))) % (2**32))
+    hop_seed2 = int(abs(hash("loss" + str(tuple(path)))) % (2**32))
+    hop_seed3 = int(abs(hash("bw" + str(tuple(path)))) % (2**32))
 
-    base_delay = total_dist * 1.5 + num_hops * float(base_rng.uniform(0.1, 0.5))
+    # Delay remains largely proportional to hop count (to simulate geographical distance)
+    rng_dist = np.random.default_rng(hop_seed1)
+    total_dist = float(rng_dist.uniform(0.5, 3.0, num_hops).sum())
+    base_delay = total_dist * 1.5 + num_hops * float(rng_dist.uniform(0.5, 2.0))
     avg_delay   = float(base_delay + dyn_rng.uniform(-0.1, 0.4) * num_hops)
     
-    base_loss   = float(min(0.12, 0.005 + total_dist * 0.002))
-    packet_loss = float(max(0.0, base_loss + dyn_rng.uniform(-0.002, 0.015)))
+    # Loss is independent. A short path might have an extremely faulty wire!
+    rng_loss = np.random.default_rng(hop_seed2)
+    # 20% chance of a "bad cable" causing high loss even on a short connection
+    is_faulty = rng_loss.random() > 0.8
+    base_loss = float(rng_loss.uniform(0.05, 0.15)) if is_faulty else float(rng_loss.uniform(0.001, 0.02) + (num_hops * 0.005))
+    packet_loss = float(max(0.0, base_loss + dyn_rng.uniform(-0.002, 0.005)))
     
-    base_bw     = float(base_rng.uniform(50, 100) if num_hops <= 2
-                        else base_rng.uniform(20, 60) if num_hops <= 4
-                        else base_rng.uniform(5, 25))
-    bandwidth   = float(max(5.0, base_bw + dyn_rng.uniform(-5.0, 8.0)))
+    # Bandwidth is independent. A short path might be an old 10Mbps link, while a 3-hop path uses massive 100Mbps fiber trunks.
+    rng_bw = np.random.default_rng(hop_seed3)
+    is_high_capacity = rng_bw.random() > 0.5
+    base_bw = float(rng_bw.uniform(60, 100)) if is_high_capacity else float(rng_bw.uniform(10, 40))
+    # Slight decay per hop to simulate bottleneck chance, but not strictly bound
+    base_bw = base_bw * (0.9 ** (num_hops - 1))
+    bandwidth   = float(max(5.0, base_bw + dyn_rng.uniform(-2.0, 5.0)))
     
-    load        = float(min(0.95, max(0.1, dyn_rng.uniform(0.3, 0.8) + num_hops * 0.03)))
+    # Load is somewhat dynamic
+    load        = float(min(0.95, max(0.1, dyn_rng.uniform(0.2, 0.9))))
 
     return {
         'avg_delay':      round(avg_delay,   4),
@@ -360,11 +375,9 @@ def select_best_path_ml(paths, strategy, trust_scores, fatigue_scores, qos_prior
 
     for path in paths:
         pm = generate_path_metrics(path)
-        # Effective trust penalised by fatigue
-        path_trust = float(np.mean([
-            max(0.1, trust_scores.get(n, 0.5) - fatigue_scores.get(n, 0.0) * 0.4)
-            for n in path
-        ]))
+        # Effective trust penalised by fatigue - a chain is only as strong as its weakest link!
+        node_trusts = [max(0.01, trust_scores.get(n, 0.5) - fatigue_scores.get(n, 0.0) * 0.4) for n in path]
+        path_trust = float(np.min(node_trusts) if np.min(node_trusts) < 0.3 else np.mean(node_trusts))
         pm['trust_avg'] = path_trust
         features = [pm['avg_delay'], pm['packet_loss'],
                     pm['bandwidth'], pm['load'], pm['trust_avg']]

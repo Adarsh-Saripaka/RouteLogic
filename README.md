@@ -103,3 +103,13 @@ https://route-logic.vercel.app/
 * Yug Patel
 
 ---
+
+## 📚 References
+
+1. **Kurose, J. F., & Ross, K. W.** (2020). *Computer Networking: A Top-Down Approach* (8th ed.). Pearson. *(For core networking, QoS analysis, and routing concepts)*
+2. **Boutaba, R., et al.** (2018). *A comprehensive survey on machine learning for networking: evolution, applications and research opportunities.* Journal of Internet Services and Applications, 9, 1-99. *(For ML integration in network infrastructure)*
+3. **Russell, S., & Norvig, P.** (2020). *Artificial Intelligence: A Modern Approach* (4th ed.). Pearson. *(For foundational concepts on Decision Trees and heuristic algorithms)*
+4. **Dijkstra, E. W.** (1959). *A note on two problems in connexion with graphs.* Numerische Mathematik, 1(1), 269–271. *(For the foundational shortest-path routing algorithm)*
+5. **Hagberg, A., Swart, P., & S Chult, D.** (2008). *Exploring network structure, dynamics, and function using NetworkX.* *(Official reference for the NetworkX framework used in the simulation)*
+
+---

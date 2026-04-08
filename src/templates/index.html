@@ -551,8 +551,7 @@
       display: none;
       padding: 20px 24px;
       overflow-y: auto;
-      max-height: calc(100vh - 660px);
-      min-height: 200px
+      flex: 1;
     }
 
     .tab-pane.active {
@@ -1655,7 +1654,7 @@
           ctx.lineWidth = 3.5;
         } else if (onPath) {
           ctx.shadowColor = '#facc15';
-          ctx.shadowBlur = 25;
+          ctx.shadowBlur = 30;
           ctx.strokeStyle = '#facc15';
           ctx.lineWidth = 4.0;
         } else {
@@ -1666,20 +1665,32 @@
 
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = isCompromised ? 'rgba(255,68,102,0.65)' : col;
+        
+        // If node is on the path, fill it solidly with Golden to make it unmistakable!
+        if (isCompromised) {
+           ctx.fillStyle = 'rgba(255,68,102,0.65)';
+        } else if (onPath) {
+           ctx.fillStyle = '#facc15';
+        } else {
+           ctx.fillStyle = `hsla(${hue}, 90%, 50%, 0.75)`;
+           // Add a subtle colored ring instead of a flat white one or no ring
+           ctx.strokeStyle = `hsla(${hue}, 90%, 65%, 0.9)`;
+           ctx.lineWidth = 1.5;
+        }
+        
         ctx.fill();
         ctx.stroke();
         ctx.restore();
 
         // Node label
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = (onPath && !isCompromised) ? '#000000' : '#ffffff';
         ctx.font = `bold ${Math.max(10, r * 0.55)}px 'Space Mono',monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(node), pos.x, pos.y - 1);
 
         // Trust value below node
-        ctx.fillStyle = '#fff';                         // FIX: was left as '#000' in original — white is readable on canvas
+        ctx.fillStyle = '#fff';
         ctx.font = `${Math.max(8, r * 0.38)}px 'Space Mono',monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
@@ -1853,6 +1864,10 @@
       if (source === dest) { flash('Source and destination must differ', 'error'); return; }
       if (!S.edges.length) { flash('Add at least one connection', 'error'); return; }
       if (numPkt < 1) { flash('Packet count must be ≥ 1', 'error'); return; }
+
+      // Clear the previously highlighted path immediately
+      S.highlightPath = null;
+      draw();
 
       const btn = document.getElementById('runBtn');
       btn.disabled = true;
@@ -2291,9 +2306,21 @@
         S.trust[target] = 0.05;
 
         flash(`🚨 DDoS Attack successful on Node ${target}!`, 'error');
-        addLocalEvent('error', '⚡', `CHAOS INJECTED: Node ${target} overloaded. Trust crushed, Fatigue maxed.`);
+        addLocalEvent('error', '⚡', `CHAOS INJECTED: Node ${target} overloaded.`);
+        
         updateStats();
-        draw(S.highlightPath);
+
+        // If the path was relying on the dead node, visually break it and auto-heal
+        if (S.highlightPath && S.highlightPath.includes(target)) {
+          S.highlightPath = null;
+          draw();
+          addLocalEvent('warning', '⚠️', 'Connection dropped! Initiating self-healing routing...');
+          setTimeout(() => runPrediction(), 1000);
+        } else {
+          S.highlightPath = null;
+          draw();
+        }
+
       } catch (e) {
         flash('Chaos injection failed: ' + e.message, 'error');
       }

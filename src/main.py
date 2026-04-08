@@ -358,11 +358,25 @@ class SmartRoutingNetwork:
 
     def find_best_path(self, source: int, dest: int,
                        strategy: str = 'hybrid') -> list | None:
-        if not nx.has_path(self.graph, source, dest):
-            print(f"⚠️  No path between {source} and {dest}")
+        
+        # Exclude completely blocked/compromised nodes
+        blocked_nodes = [
+            n for n in self.graph.nodes() 
+            if self.trust_scores.get(n, 0.5) <= 0.1
+        ]
+        
+        active_graph = self.graph.copy()
+        active_graph.remove_nodes_from(blocked_nodes)
+        
+        if source in blocked_nodes or dest in blocked_nodes:
+            print(f"⚠️  Source or destination node is compromised.")
             return None
 
-        paths = list(nx.all_simple_paths(self.graph, source, dest, cutoff=5))
+        if not nx.has_path(active_graph, source, dest):
+            print(f"⚠️  No path between {source} and {dest} (network partitioned).")
+            return None
+
+        paths = list(nx.all_simple_paths(active_graph, source, dest, cutoff=5))
         if not paths:
             return None
 

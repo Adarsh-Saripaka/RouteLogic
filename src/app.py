@@ -583,14 +583,34 @@ def predict_api():
         if source == dest:
             return safe_jsonify({'error': 'source and dest must differ'}, 400)
 
+        # ── Ensure every node has trust & fatigue entries (int keys) ──────────
+        for n in nodes:
+            trust_scores_global.setdefault(n, 0.9)
+            node_fatigue_global.setdefault(n, 0.0)
+
         # ── Build graph ───────────────────────────────────────────────────────
         G = nx.Graph()
         G.add_nodes_from(nodes)
-        G.add_edges_from(edges)
+        
+        # Filter edges to exclude completely blocked/compromised nodes (DDoS / Hardware Failure)
+        active_edges = []
+        blocked_nodes = set()
+        for n in nodes:
+            # We only sever the topological link if trust is crushed (from Chaos Inject).
+            # High fatigue should NOT partition the network; it acts as a penalty, not a hard broken wire.
+            if trust_scores_global[n] <= 0.08:
+                blocked_nodes.add(n)
+                
+        for u, v in edges:
+            if u not in blocked_nodes and v not in blocked_nodes:
+                active_edges.append((u, v))
+                
+        G.add_edges_from(active_edges)
 
         if not nx.has_path(G, source, dest):
-            return safe_jsonify(
-                {'error': f'No path exists between Node {source} and Node {dest}'}, 400)
+            if source in blocked_nodes or dest in blocked_nodes:
+                return safe_jsonify({'error': f'Source or Destination is compromised/blocked. Route unavailable.'}, 400)
+            return safe_jsonify({'error': f'Network partitioned by blocked nodes. No path exists.'}, 400)
 
         from itertools import islice
         # FIX: Ensure shortest logical paths are evaluated first.
@@ -598,11 +618,6 @@ def predict_api():
         all_paths = list(islice(nx.shortest_simple_paths(G, source, dest), 20))
         if not all_paths:
             return safe_jsonify({'error': 'No simple path found'}, 400)
-
-        # ── Ensure every node has trust & fatigue entries (int keys) ──────────
-        for n in nodes:
-            trust_scores_global.setdefault(n, 0.9)
-            node_fatigue_global.setdefault(n, 0.0)
 
         # ── Select best path ──────────────────────────────────────────────────
         best_path, path_metrics = select_best_path_ml(
